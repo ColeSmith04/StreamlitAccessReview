@@ -191,20 +191,48 @@ with tabs[1]:
             else: st.error("Incorrect passcode.")
     else:
         st.subheader("Upload Employee CSV")
-        uploaded = st.file_uploader("CSV File", type=['csv'])
+        uploaded = st.file_uploader("Choose CSV file", type=['csv'], key='csv_upload')
         if uploaded:
-            os.makedirs(os.path.join(BASE_DIR,'data'), exist_ok=True)
-            dest = os.path.join(BASE_DIR,'data',uploaded.name)
-            with open(dest,'wb') as f: f.write(uploaded.getbuffer())
-            with open(DATA_CONFIG,'w') as f: json.dump({'active_csv':dest},f)
-            df = pd.read_csv(dest,encoding='ISO-8859-1')
-            codes = load_or_create_codes(df)
-            st.success("Data uploaded. Codes initialized.")
+            # Read file in memory and catch parsing errors
+            try:
+                data_bytes = uploaded.read()
+                df = pd.read_csv(BytesIO(data_bytes), encoding='ISO-8859-1')
+            except Exception as e:
+                st.error(f"Error reading CSV file: {e}")
+                st.stop()
+
+            # Save the file to disk
+            data_dir = os.path.join(BASE_DIR, 'data')
+            os.makedirs(data_dir, exist_ok=True)
+            dest = os.path.join(data_dir, uploaded.name)
+            with open(dest, 'wb') as f:
+                f.write(data_bytes)
+
+            # Update active config to point to new CSV
+            with open(DATA_CONFIG, 'w') as f:
+                json.dump({'active_csv': dest}, f)
+
+            # Generate and display supervisor codes
+            code_map = load_or_create_codes(df)
+            st.success("CSV uploaded and codes initialized.")
             st.subheader("Supervisor Access Codes")
-            st.table(pd.DataFrame.from_dict(codes, orient='index', columns=['Code']).reset_index().rename(columns={'index':'Supervisor'}))
+            codes_df = (
+                pd.DataFrame.from_dict(code_map, orient='index', columns=['Code'])
+                  .reset_index()
+                  .rename(columns={'index':'Supervisor'})
+            )
+            st.table(codes_df)
+
+        # Step 3: Download log
         st.subheader("Download Access Review Log")
         if os.path.exists(EXCEL_OUTPUT):
-            with open(EXCEL_OUTPUT,'rb') as f: data = f.read()
-            st.download_button("Download Excel Log", data=BytesIO(data), file_name='access_review_log.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            with open(EXCEL_OUTPUT, 'rb') as f:
+                log_bytes = f.read()
+            st.download_button(
+                "Download Excel Log",
+                data=BytesIO(log_bytes),
+                file_name='access_review_log.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
         else:
-            st.info("No log available yet.")
+            st.info("No reviews logged yet.")
