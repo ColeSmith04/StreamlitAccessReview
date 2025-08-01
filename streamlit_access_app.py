@@ -223,6 +223,17 @@ with tabs[1]:
             )
             st.table(codes_df)
 
+            # --- NEW: Download the codes as CSV ---
+            csv_data = codes_df.to_csv(index=False)
+            st.download_button(
+                label="Download Supervisor Codes CSV",
+                data=csv_data,
+                file_name="supervisor_codes.csv",
+                mime="text/csv",
+                key="download_codes"
+            )
+
+
         # Step 3: Download log
         st.subheader("Download Access Review Log")
         if os.path.exists(EXCEL_OUTPUT):
