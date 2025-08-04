@@ -247,6 +247,9 @@ with tabs[1]:
                 # now concatenate — all parts share the same columns
                 df = pd.concat(all_dfs, ignore_index=True)
 
+                # Strip any leading/trailing spaces from headers
+                df.columns = df.columns.str.strip()
+
 
                 # Save each to disk
                 data_dir = os.path.join(BASE_DIR, 'data')
