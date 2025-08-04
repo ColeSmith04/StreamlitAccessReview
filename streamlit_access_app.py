@@ -273,10 +273,17 @@ with tabs[1]:
                     with open(dest, 'wb') as f:
                         f.write(bytes_data)
 
-                # Update active config to first file
-                first_dest = os.path.join(data_dir, file_data[0][0])
+                # ───────────────────────────────────────────────────────────────
+                # 1) Save the merged DataFrame as a single “active” CSV
+                os.makedirs(data_dir, exist_ok=True)
+                merged_path = os.path.join(data_dir, 'active_combined.csv')
+                df.to_csv(merged_path, index=False, encoding='utf-8')
+
+                # 2) Tell the app to load that one from now on
                 with open(DATA_CONFIG, 'w') as f:
-                    json.dump({'active_csv': first_dest}, f)
+                    json.dump({'active_csv': merged_path}, f)
+                # ───────────────────────────────────────────────────────────────
+
 
                 # Generate & display supervisor codes
                 code_map = load_or_create_codes(df)
