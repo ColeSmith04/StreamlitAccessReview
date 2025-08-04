@@ -189,7 +189,7 @@ with tabs[1]:
         if st.button("Unlock Admin Panel"):
             if pwd == "1234": st.session_state.admin_verified = True; st.rerun()
             else: st.error("Incorrect passcode.")
-        else:
+    else:
         st.subheader("Upload Employee CSVs")
         # Wrap uploader in a form so user can pick multiple and then “Upload Files”
         with st.form("upload_form"):
