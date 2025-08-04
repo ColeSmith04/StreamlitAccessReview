@@ -73,7 +73,18 @@ def load_dataframe():
 
 
 def load_or_create_codes(df):
-    supervisors = sorted(df['Supervisor'].dropna().unique())
+    # 1) Clean up the column names
+    df.columns = df.columns.str.replace(r'^\ufeff', '', regex=True).str.strip()
+    # 2) Find the real “Supervisor” column (case-insensitive)
+    sup_col = next((c for c in df.columns if c.lower() == 'supervisor'), None)
+    if sup_col is None:
+        st.error("Missing ‘Supervisor’ column in your data after normalization.")
+        st.stop()
+
+    # 3) Extract unique supervisors
+    supervisors = sorted(df[sup_col].dropna().unique())
+
+    # 4) Load or build the code map
     code_map = {}
     if os.path.exists(CODE_FILE):
         with open(CODE_FILE, 'r') as f:
@@ -81,9 +92,12 @@ def load_or_create_codes(df):
     for sup in supervisors:
         if sup not in code_map:
             code_map[sup] = generate_unique_code(code_map.values())
+
     with open(CODE_FILE, 'w') as f:
         json.dump(code_map, f, indent=2)
+
     return code_map
+
 
 
 def find_supervisor_by_code(code):
@@ -248,7 +262,9 @@ with tabs[1]:
                 df = pd.concat(all_dfs, ignore_index=True)
 
                 # Strip any leading/trailing spaces from headers
-                df.columns = df.columns.str.strip()
+                # ── Strip BOMs/extra whitespace so "Supervisor" really exists ──
+                df.columns = df.columns.str.replace(r'^\ufeff', '', regex=True).str.strip()
+
 
 
                 # Save each to disk
