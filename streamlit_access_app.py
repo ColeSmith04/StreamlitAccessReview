@@ -189,49 +189,72 @@ with tabs[1]:
         if st.button("Unlock Admin Panel"):
             if pwd == "1234": st.session_state.admin_verified = True; st.rerun()
             else: st.error("Incorrect passcode.")
-    else:
-        st.subheader("Upload Employee CSV")
-        uploaded = st.file_uploader("Choose CSV file", type=['csv'], key='csv_upload')
-        if uploaded:
-            # Read file in memory and catch parsing errors
-            try:
-                data_bytes = uploaded.read()
-                df = pd.read_csv(BytesIO(data_bytes), encoding='ISO-8859-1')
-            except Exception as e:
-                st.error(f"Error reading CSV file: {e}")
-                st.stop()
-
-            # Save the file to disk
-            data_dir = os.path.join(BASE_DIR, 'data')
-            os.makedirs(data_dir, exist_ok=True)
-            dest = os.path.join(data_dir, uploaded.name)
-            with open(dest, 'wb') as f:
-                f.write(data_bytes)
-
-            # Update active config to point to new CSV
-            with open(DATA_CONFIG, 'w') as f:
-                json.dump({'active_csv': dest}, f)
-
-            # Generate and display supervisor codes
-            code_map = load_or_create_codes(df)
-            st.success("CSV uploaded and codes initialized.")
-            st.subheader("Supervisor Access Codes")
-            codes_df = (
-                pd.DataFrame.from_dict(code_map, orient='index', columns=['Code'])
-                  .reset_index()
-                  .rename(columns={'index':'Supervisor'})
+        else:
+        st.subheader("Upload Employee CSVs")
+        # Wrap uploader in a form so user can pick multiple and then “Upload Files”
+        with st.form("upload_form"):
+            uploaded_files = st.file_uploader(
+                "Choose CSV files",
+                type=['csv'],
+                accept_multiple_files=True,
+                key='csv_upload'
             )
-            st.table(codes_df)
+            upload_submit = st.form_submit_button("Upload Files")
 
-            # --- NEW: Download the codes as CSV ---
-            csv_data = codes_df.to_csv(index=False)
-            st.download_button(
-                label="Download Supervisor Codes CSV",
-                data=csv_data,
-                file_name="supervisor_codes.csv",
-                mime="text/csv",
-                key="download_codes"
-            )
+        if upload_submit:
+            if not uploaded_files:
+                st.warning("Please select at least one CSV file.")
+            else:
+                all_dfs = []
+                file_data = []
+                # Read and validate each file in memory
+                for uploaded in uploaded_files:
+                    try:
+                        data_bytes = uploaded.read()
+                        df_part = pd.read_csv(BytesIO(data_bytes), encoding='ISO-8859-1')
+                        all_dfs.append(df_part)
+                        file_data.append((uploaded.name, data_bytes))
+                    except Exception as e:
+                        st.error(f"Error reading {uploaded.name}: {e}")
+                        st.stop()
+                # Merge them
+                df = pd.concat(all_dfs, ignore_index=True)
+
+                # Save each to disk
+                data_dir = os.path.join(BASE_DIR, 'data')
+                os.makedirs(data_dir, exist_ok=True)
+                for name, bytes_data in file_data:
+                    dest = os.path.join(data_dir, name)
+                    with open(dest, 'wb') as f:
+                        f.write(bytes_data)
+
+                # Point config at the first file (so supervisors pick up the right CSV)
+                first_dest = os.path.join(data_dir, file_data[0][0])
+                with open(DATA_CONFIG, 'w') as f:
+                    json.dump({'active_csv': first_dest}, f)
+
+                # Generate & show codes
+                code_map = load_or_create_codes(df)
+                st.success("All CSVs uploaded and codes initialized.")
+                st.subheader("Supervisor Access Codes")
+                codes_df = (
+                    pd.DataFrame.from_dict(code_map, orient='index', columns=['Code'])
+                      .reset_index()
+                      .rename(columns={'index':'Supervisor'})
+                )
+                st.table(codes_df)
+                # Download button for codes
+                csv_data = codes_df.to_csv(index=False)
+                st.download_button(
+                    "Download Supervisor Codes CSV",
+                    data=csv_data,
+                    file_name="supervisor_codes.csv",
+                    mime="text/csv",
+                    key="download_codes"
+                )
+
+        # …followed by your existing “Download Access Review Log” section…
+
 
 
         # Step 3: Download log
