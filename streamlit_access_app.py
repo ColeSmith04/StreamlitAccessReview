@@ -226,20 +226,26 @@ with tabs[1]:
                 file_data = []
                 expected_cols = None
 
+                # Read and normalize each CSV
                 for idx, uploaded in enumerate(uploaded_files):
                     data_bytes = uploaded.read()
-
                     if idx == 0:
-                        # first file: read normally, capture its columns
+                        # first file: read normally
                         df_part = pd.read_csv(
                             BytesIO(data_bytes),
                             encoding='ISO-8859-1',
                             engine='python',
-                            on_bad_lines='skip'            # skip truly malformed lines
+                            on_bad_lines='skip'
+                        )
+                        # capture and normalize column names
+                        df_part.columns = (
+                            df_part.columns
+                                .str.replace(r'^﻿', '', regex=True)
+                                .str.strip()
                         )
                         expected_cols = df_part.columns.tolist()
                     else:
-                        # subsequent files: skip their header row, force the same columns
+                        # subsequent files: skip their header row, enforce columns
                         df_part = pd.read_csv(
                             BytesIO(data_bytes),
                             encoding='ISO-8859-1',
@@ -247,27 +253,19 @@ with tabs[1]:
                             on_bad_lines='skip',
                             header=None,
                             names=expected_cols,
-                            skiprows=1                       # drop the secondary header
+                            skiprows=1
                         )
-
                     all_dfs.append(df_part)
                     file_data.append((uploaded.name, data_bytes))
 
-                # sanity check
                 if not all_dfs:
                     st.error("No valid CSV files could be parsed.")
                     st.stop()
 
-                # now concatenate — all parts share the same columns
+                # Concatenate into one DataFrame
                 df = pd.concat(all_dfs, ignore_index=True)
 
-                # Strip any leading/trailing spaces from headers
-                # ── Strip BOMs/extra whitespace so "Supervisor" really exists ──
-                df.columns = df.columns.str.replace(r'^\ufeff', '', regex=True).str.strip()
-
-
-
-                # Save each to disk
+                # Persist raw uploads
                 data_dir = os.path.join(BASE_DIR, 'data')
                 os.makedirs(data_dir, exist_ok=True)
                 for name, bytes_data in file_data:
@@ -275,7 +273,7 @@ with tabs[1]:
                     with open(dest, 'wb') as f:
                         f.write(bytes_data)
 
-                # Point config at the first file
+                # Update active config to first file
                 first_dest = os.path.join(data_dir, file_data[0][0])
                 with open(DATA_CONFIG, 'w') as f:
                     json.dump({'active_csv': first_dest}, f)
@@ -294,14 +292,12 @@ with tabs[1]:
                 # Download codes as CSV
                 csv_data = codes_df.to_csv(index=False)
                 st.download_button(
-                    "Download Supervisor Codes CSV",
-                    data=csv_data,
-                    file_name="supervisor_codes.csv",
-                    mime="text/csv",
+                    "Download Supervisor Codes CSV", data=csv_data,
+                    file_name="supervisor_codes.csv", mime="text/csv",
                     key="download_codes"
                 )
 
-        # Step 3: Download review log
+    # Step 3: Download review log
         st.subheader("Download Access Review Log")
         if os.path.exists(EXCEL_OUTPUT):
             with open(EXCEL_OUTPUT, 'rb') as f:
