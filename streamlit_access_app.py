@@ -182,22 +182,25 @@ with tabs[0]:
 # Admin Panel Tab
 with tabs[1]:
     st.header("Admin Panel")
+    # Initialize admin passcode state
     if 'admin_verified' not in st.session_state:
         st.session_state.admin_verified = False
+
+    # Step 1: Passcode entry
     if not st.session_state.admin_verified:
-        pwd = st.text_input("Admin passcode", type="password")
-        if st.button("Unlock Admin Panel"):
-            if pwd == "1234": st.session_state.admin_verified = True; st.rerun()
-            else: st.error("Incorrect passcode.")
+        pwd = st.text_input("Admin passcode", type="password", key='admin_pass')
+        if st.button("Unlock Admin Panel", key='unlock_button'):
+            if pwd == "1234":
+                st.session_state.admin_verified = True
+                st.rerun()
+            else:
+                st.error("Incorrect passcode.")
+    # Step 2: CSV upload & code generation
     else:
         st.subheader("Upload Employee CSVs")
-        # Wrap uploader in a form so user can pick multiple and then “Upload Files”
         with st.form("upload_form"):
             uploaded_files = st.file_uploader(
-                "Choose CSV files",
-                type=['csv'],
-                accept_multiple_files=True,
-                key='csv_upload'
+                "Choose CSV files", type=['csv'], accept_multiple_files=True, key='csv_upload'
             )
             upload_submit = st.form_submit_button("Upload Files")
 
@@ -211,13 +214,22 @@ with tabs[1]:
                 for uploaded in uploaded_files:
                     try:
                         data_bytes = uploaded.read()
-                        df_part = pd.read_csv(BytesIO(data_bytes), encoding='ISO-8859-1')
+                        df_part = pd.read_csv(
+                            BytesIO(data_bytes),
+                            encoding='ISO-8859-1',
+                            engine='python',
+                            on_bad_lines='skip'
+                        )
                         all_dfs.append(df_part)
                         file_data.append((uploaded.name, data_bytes))
                     except Exception as e:
-                        st.error(f"Error reading {uploaded.name}: {e}")
-                        st.stop()
-                # Merge them
+                        st.warning(f"Skipping '{uploaded.name}' due to parsing error: {e}")
+                        continue
+                # After attempting all uploads, ensure we have at least one valid df
+                if not all_dfs:
+                    st.error("No valid CSV files could be parsed. Please check your file formats and try again.")
+                    st.stop()
+                # Merge all successfully parsed parts
                 df = pd.concat(all_dfs, ignore_index=True)
 
                 # Save each to disk
@@ -228,12 +240,12 @@ with tabs[1]:
                     with open(dest, 'wb') as f:
                         f.write(bytes_data)
 
-                # Point config at the first file (so supervisors pick up the right CSV)
+                # Point config at the first file
                 first_dest = os.path.join(data_dir, file_data[0][0])
                 with open(DATA_CONFIG, 'w') as f:
                     json.dump({'active_csv': first_dest}, f)
 
-                # Generate & show codes
+                # Generate & display supervisor codes
                 code_map = load_or_create_codes(df)
                 st.success("All CSVs uploaded and codes initialized.")
                 st.subheader("Supervisor Access Codes")
@@ -243,7 +255,8 @@ with tabs[1]:
                       .rename(columns={'index':'Supervisor'})
                 )
                 st.table(codes_df)
-                # Download button for codes
+
+                # Download codes as CSV
                 csv_data = codes_df.to_csv(index=False)
                 st.download_button(
                     "Download Supervisor Codes CSV",
@@ -253,11 +266,7 @@ with tabs[1]:
                     key="download_codes"
                 )
 
-        # …followed by your existing “Download Access Review Log” section…
-
-
-
-        # Step 3: Download log
+        # Step 3: Download review log
         st.subheader("Download Access Review Log")
         if os.path.exists(EXCEL_OUTPUT):
             with open(EXCEL_OUTPUT, 'rb') as f:
@@ -270,3 +279,4 @@ with tabs[1]:
             )
         else:
             st.info("No reviews logged yet.")
+
