@@ -210,27 +210,43 @@ with tabs[1]:
             else:
                 all_dfs = []
                 file_data = []
-                # Read and validate each file in memory
-                for uploaded in uploaded_files:
-                    try:
-                        data_bytes = uploaded.read()
+                expected_cols = None
+
+                for idx, uploaded in enumerate(uploaded_files):
+                    data_bytes = uploaded.read()
+
+                    if idx == 0:
+                        # first file: read normally, capture its columns
                         df_part = pd.read_csv(
                             BytesIO(data_bytes),
                             encoding='ISO-8859-1',
                             engine='python',
-                            on_bad_lines='skip'
+                            on_bad_lines='skip'            # skip truly malformed lines
                         )
-                        all_dfs.append(df_part)
-                        file_data.append((uploaded.name, data_bytes))
-                    except Exception as e:
-                        st.warning(f"Skipping '{uploaded.name}' due to parsing error: {e}")
-                        continue
-                # After attempting all uploads, ensure we have at least one valid df
+                        expected_cols = df_part.columns.tolist()
+                    else:
+                        # subsequent files: skip their header row, force the same columns
+                        df_part = pd.read_csv(
+                            BytesIO(data_bytes),
+                            encoding='ISO-8859-1',
+                            engine='python',
+                            on_bad_lines='skip',
+                            header=None,
+                            names=expected_cols,
+                            skiprows=1                       # drop the secondary header
+                        )
+
+                    all_dfs.append(df_part)
+                    file_data.append((uploaded.name, data_bytes))
+
+                # sanity check
                 if not all_dfs:
-                    st.error("No valid CSV files could be parsed. Please check your file formats and try again.")
+                    st.error("No valid CSV files could be parsed.")
                     st.stop()
-                # Merge all successfully parsed parts
+
+                # now concatenate — all parts share the same columns
                 df = pd.concat(all_dfs, ignore_index=True)
+
 
                 # Save each to disk
                 data_dir = os.path.join(BASE_DIR, 'data')
