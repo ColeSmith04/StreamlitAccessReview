@@ -6,13 +6,8 @@ import random
 from openpyxl import load_workbook, Workbook
 from datetime import datetime
 from io import BytesIO
-from github import Github
-from github.GithubException import GithubException
 
-
-GITHUB_REPO = "ColeSmith04/StreamlitAccessReview"
-GITHUB_BRANCH = "master"
-COMMIT_MSG = "update active CSV from Streamlit upload"
+# Constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_CONFIG = os.path.join(BASE_DIR, 'active_config.json')
 CODE_FILE = os.path.join(BASE_DIR, 'supervisor_codes.json')
@@ -56,48 +51,6 @@ st.markdown(
 )
 
 # Utilities
-
-def commit_file_to_github(file_path: str) -> None:
-    """
-    Create-or-update `file_path` in the GitHub repo.
-    Works for CSVs up to ~1 MB (GitHub API limit for this endpoint).
-    """
-    token = st.secrets.get("GITHUB_TOKEN")        # ← won’t explode if missing
-    if not token:
-        st.warning("GitHub token missing – skipping upload.")
-        return
-
-    gh   = Github(token)
-    repo = gh.get_repo(GITHUB_REPO)
-
-    # Path inside the repo (always use / on GitHub)
-    repo_path = os.path.relpath(file_path, BASE_DIR).replace(os.sep, "/")
-
-    # ➡ **read as *text*, not bytes** ⬅
-    with open(file_path, "r", encoding="utf-8") as f:
-        data = f.read()
-
-    try:
-        contents = repo.get_contents(repo_path, ref=GITHUB_BRANCH)
-        repo.update_file(
-            path     = contents.path,
-            message  = COMMIT_MSG,
-            content  = data,
-            sha      = contents.sha,
-            branch   = GITHUB_BRANCH,
-        )
-    except GithubException as e:
-        # 404 ⇒ file doesn’t exist yet – create it
-        if e.status == 404:
-            repo.create_file(
-                path     = repo_path,
-                message  = COMMIT_MSG,
-                content  = data,
-                branch   = GITHUB_BRANCH,
-            )
-        else:
-            raise       # re-throw everything else so Streamlit shows the error
-    
 def generate_unique_code(existing):
     while True:
         code = str(random.randint(1000, 9999))
@@ -327,16 +280,8 @@ with tabs[1]:
                 df.to_csv(merged_path, index=False, encoding='utf-8')
 
                 # 2) Tell the app to load that one from now on
-                # …
                 with open(DATA_CONFIG, 'w') as f:
                     json.dump({'active_csv': merged_path}, f)
-
-                try:
-                    commit_file_to_github(merged_path)
-                    st.success("Merged CSV saved and pushed to GitHub ✔️")
-                except Exception as e:
-                    st.error(f"⚠️ GitHub push failed: {e}")
-
                 # ───────────────────────────────────────────────────────────────
 
 
@@ -372,6 +317,5 @@ with tabs[1]:
             )
         else:
             st.info("No reviews logged yet.")
-
 
 
