@@ -320,10 +320,16 @@ with tabs[1]:
                 df.to_csv(merged_path, index=False, encoding='utf-8')
 
                 # 2) Tell the app to load that one from now on
+                # …
                 with open(DATA_CONFIG, 'w') as f:
                     json.dump({'active_csv': merged_path}, f)
 
-                commit_file_to_github(merged_path)
+                try:
+                    commit_file_to_github(merged_path)
+                    st.success("Merged CSV saved and pushed to GitHub ✔️")
+                except Exception as e:
+                    st.error(f"⚠️ GitHub push failed: {e}")
+
                 # ───────────────────────────────────────────────────────────────
 
 
