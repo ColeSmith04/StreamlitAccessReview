@@ -8,16 +8,14 @@ from datetime import datetime
 from io import BytesIO
 from github import Github
 
-PERSIST_DIR = "/mnt/data"
-os.makedirs(PERSIST_DIR, exist_ok=True)
 
-DATA_CONFIG = os.path.join(PERSIST_DIR, 'active_config.json')
-CODE_FILE = os.path.join(PERSIST_DIR, 'supervisor_codes.json')
-EXCEL_OUTPUT = os.path.join(PERSIST_DIR, 'access_review_log.xlsx')
-
-GITHUB_REPO   = "ColeSmith04/StreamlitAccessReview"
+GITHUB_REPO = "ColeSmith04/StreamlitAccessReview"
 GITHUB_BRANCH = "master"
-COMMIT_MSG    = "update active CSV from Streamlit upload"
+COMMIT_MSG = "update active CSV from Streamlit upload"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_CONFIG = os.path.join(BASE_DIR, 'active_config.json')
+CODE_FILE = os.path.join(BASE_DIR, 'supervisor_codes.json')
+EXCEL_OUTPUT = os.path.join(BASE_DIR, 'access_review_log.xlsx')
 
 # CSS Styling
 st.set_page_config(page_title="Access Review Portal", layout="centered")
@@ -68,7 +66,7 @@ def commit_file_to_github(file_path: str):
     repo = gh.get_repo(GITHUB_REPO)
 
     # GitHub paths must be relative to your repo root
-    repo_path = os.path.relpath(file_path, PERSIST_DIR).replace(os.sep, "/")
+    repo_path = os.path.relpath(file_path, BASE_DIR).replace(os.sep, "/")
 
     # read new content
     with open(file_path, "rb") as f:
@@ -308,7 +306,7 @@ with tabs[1]:
                 df = pd.concat(all_dfs, ignore_index=True)
 
                 # Persist raw uploads
-                data_dir = os.path.join(PERSIST_DIR, 'data')
+                data_dir = os.path.join(BASE_DIR, 'data')
                 os.makedirs(data_dir, exist_ok=True)
                 for name, bytes_data in file_data:
                     dest = os.path.join(data_dir, name)
@@ -318,16 +316,20 @@ with tabs[1]:
                 # ───────────────────────────────────────────────────────────────
                 # 1) Save the merged DataFrame as a single “active” CSV
                 os.makedirs(data_dir, exist_ok=True)
-                merged_path = os.path.join(PERSIST_DIR, 'active_combined.csv')
+                merged_path = os.path.join(data_dir, 'active_combined.csv')
                 df.to_csv(merged_path, index=False, encoding='utf-8')
-
 
                 # 2) Tell the app to load that one from now on
                 # …
                 with open(DATA_CONFIG, 'w') as f:
                     json.dump({'active_csv': merged_path}, f)
 
-  
+                try:
+                    commit_file_to_github(merged_path)
+                    st.success("Merged CSV saved and pushed to GitHub ✔️")
+                except Exception as e:
+                    st.error(f"⚠️ GitHub push failed: {e}")
+
                 # ───────────────────────────────────────────────────────────────
 
 
@@ -363,4 +365,6 @@ with tabs[1]:
             )
         else:
             st.info("No reviews logged yet.")
+
+
 
