@@ -1,4 +1,4 @@
-PyGithub==2.0.1
+PyGithub
 allie-sdk==2.0.0
 altair==5.5.0
 asn1crypto==1.5.1
