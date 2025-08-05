@@ -7,6 +7,7 @@ from openpyxl import load_workbook, Workbook
 from datetime import datetime
 from io import BytesIO
 from github import Github
+from github.GithubException import GithubException
 
 
 GITHUB_REPO = "ColeSmith04/StreamlitAccessReview"
@@ -56,40 +57,46 @@ st.markdown(
 
 # Utilities
 
-def commit_file_to_github(file_path: str):
+def commit_file_to_github(file_path: str) -> None:
     """
-    Push `file_path` back into your GitHub repo (creating or updating it).
+    Create-or-update `file_path` in the GitHub repo.
+    Works for CSVs up to ~1 MB (GitHub API limit for this endpoint).
     """
-    # load token from Streamlit secrets
-    token = st.secrets["GITHUB_TOKEN"]
-    gh = Github(token)
+    token = st.secrets.get("GITHUB_TOKEN")        # ← won’t explode if missing
+    if not token:
+        st.warning("GitHub token missing – skipping upload.")
+        return
+
+    gh   = Github(token)
     repo = gh.get_repo(GITHUB_REPO)
 
-    # GitHub paths must be relative to your repo root
+    # Path inside the repo (always use / on GitHub)
     repo_path = os.path.relpath(file_path, BASE_DIR).replace(os.sep, "/")
 
-    # read new content
-    with open(file_path, "rb") as f:
+    # ➡ **read as *text*, not bytes** ⬅
+    with open(file_path, "r", encoding="utf-8") as f:
         data = f.read()
 
     try:
-        # if file already exists in repo, update it
         contents = repo.get_contents(repo_path, ref=GITHUB_BRANCH)
         repo.update_file(
-            path=contents.path,
-            message=COMMIT_MSG,
-            content=data,
-            sha=contents.sha,
-            branch=GITHUB_BRANCH
+            path     = contents.path,
+            message  = COMMIT_MSG,
+            content  = data,
+            sha      = contents.sha,
+            branch   = GITHUB_BRANCH,
         )
-    except Exception:
-        # otherwise create it
-        repo.create_file(
-            path=repo_path,
-            message=COMMIT_MSG,
-            content=data,
-            branch=GITHUB_BRANCH
-        )
+    except GithubException as e:
+        # 404 ⇒ file doesn’t exist yet – create it
+        if e.status == 404:
+            repo.create_file(
+                path     = repo_path,
+                message  = COMMIT_MSG,
+                content  = data,
+                branch   = GITHUB_BRANCH,
+            )
+        else:
+            raise       # re-throw everything else so Streamlit shows the error
     
 def generate_unique_code(existing):
     while True:
