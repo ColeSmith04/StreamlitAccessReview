@@ -6,8 +6,12 @@ import random
 from openpyxl import load_workbook, Workbook
 from datetime import datetime
 from io import BytesIO
+from github import Github
 
-# Constants
+
+GITHUB_REPO = "ColeSmith04/StreamlitAccessReview"
+GITHUB_BRANCH = "master"
+COMMIT_MSG = "update active CSV from Streamlit upload"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_CONFIG = os.path.join(BASE_DIR, 'active_config.json')
 CODE_FILE = os.path.join(BASE_DIR, 'supervisor_codes.json')
@@ -51,6 +55,42 @@ st.markdown(
 )
 
 # Utilities
+
+def commit_file_to_github(file_path: str):
+    """
+    Push `file_path` back into your GitHub repo (creating or updating it).
+    """
+    # load token from Streamlit secrets
+    token = st.secrets["GITHUB_TOKEN"]
+    gh = Github(token)
+    repo = gh.get_repo(GITHUB_REPO)
+
+    # GitHub paths must be relative to your repo root
+    repo_path = os.path.relpath(file_path, BASE_DIR).replace(os.sep, "/")
+
+    # read new content
+    with open(file_path, "rb") as f:
+        data = f.read()
+
+    try:
+        # if file already exists in repo, update it
+        contents = repo.get_contents(repo_path, ref=GITHUB_BRANCH)
+        repo.update_file(
+            path=contents.path,
+            message=COMMIT_MSG,
+            content=data,
+            sha=contents.sha,
+            branch=GITHUB_BRANCH
+        )
+    except Exception:
+        # otherwise create it
+        repo.create_file(
+            path=repo_path,
+            message=COMMIT_MSG,
+            content=data,
+            branch=GITHUB_BRANCH
+        )
+    
 def generate_unique_code(existing):
     while True:
         code = str(random.randint(1000, 9999))
@@ -282,6 +322,8 @@ with tabs[1]:
                 # 2) Tell the app to load that one from now on
                 with open(DATA_CONFIG, 'w') as f:
                     json.dump({'active_csv': merged_path}, f)
+
+                commit_file_to_github(merged_path)
                 # ───────────────────────────────────────────────────────────────
 
 
