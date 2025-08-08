@@ -4,7 +4,7 @@ name: 🔆 Keep Streamlit Awake
 on:
   schedule:
     # every 6 hours
-    - cron: '0 * * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:  # also allows you to trigger it manually from Actions
 
 jobs:
@@ -25,4 +25,5 @@ jobs:
         run: |
           git commit --allow-empty -m "chore: keep awake $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           git push
+
 
